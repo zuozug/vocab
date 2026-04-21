@@ -44,12 +44,14 @@ CREATE TABLE meaning (
 
 CREATE TABLE review_state (
     word_id BIGINT PRIMARY KEY,
-    last_success_at TIMESTAMPTZ NULL,
-    next_review_at TIMESTAMPTZ NULL,
+    proficiency INTEGER NOT NULL DEFAULT 0,
+    last_reviewed_at TIMESTAMPTZ NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT fk_review_state_word
-        FOREIGN KEY (word_id) REFERENCES word(id)
+        FOREIGN KEY (word_id) REFERENCES word(id),
+    CONSTRAINT ck_review_state_proficiency_non_negative
+        CHECK (proficiency >= 0)
 );
 
 CREATE TABLE study_session (
