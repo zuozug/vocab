@@ -2,7 +2,7 @@
 
 ## 1. 当前状态
 
-当前后端已实现基础健康检查接口和单词管理接口。
+当前后端已实现基础健康检查接口、单词管理接口和背诵复习接口。
 
 后端技术栈：
 
@@ -68,6 +68,12 @@ FastAPI 默认错误响应格式：
 | 单词管理 | `GET` | `/api/words/{word_id}` | 查询单词详情 |
 | 单词管理 | `PUT` | `/api/words/{word_id}` | 编辑单词 |
 | 单词管理 | `DELETE` | `/api/words/{word_id}` | 删除单词 |
+| 学习会话 | `GET` | `/api/study-sessions` | 查询学习历史列表 |
+| 学习会话 | `POST` | `/api/study-sessions` | 创建学习会话 |
+| 学习会话 | `GET` | `/api/study-sessions/{session_id}` | 查询学习会话详情 |
+| 学习会话 | `POST` | `/api/study-sessions/{session_id}/finish` | 结束学习会话 |
+| 背诵复习 | `GET` | `/api/reviews/next` | 获取待复习单词 |
+| 背诵复习 | `POST` | `/api/reviews/answer` | 提交答案并更新复习状态 |
 
 ---
 
@@ -333,6 +339,248 @@ GET /api/words/{word_id}
 状态码：`200`
 
 返回单词详情，结构见 `4.3 单词响应结构`。
+
+失败响应：
+
+状态码：`404`
+
+```json
+{
+  "detail": "Word not found."
+}
+```
+
+---
+
+## 7. 学习会话 API
+
+### 7.1 查询学习历史列表
+
+```http
+GET /api/study-sessions?limit=50&offset=0
+```
+
+查询参数：
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `limit` | integer | 否 | `50` | 每页数量，范围 `1` 到 `100` |
+| `offset` | integer | 否 | `0` | 分页偏移量，最小 `0` |
+
+排序规则：
+
+- 按 `coalesce(ended_at, started_at)` 倒序。
+- 时间相同时按 `id` 倒序。
+
+成功响应：
+
+状态码：`200`
+
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "started_at": "2026-04-22T10:00:00Z",
+      "ended_at": "2026-04-22T10:08:30Z",
+      "reviewed_word_count": 10,
+      "duration_seconds": 510
+    }
+  ],
+  "total": 1,
+  "limit": 50,
+  "offset": 0
+}
+```
+
+### 7.2 创建学习会话
+
+```http
+POST /api/study-sessions
+```
+
+成功响应：
+
+状态码：`201`
+
+```json
+{
+  "id": 1,
+  "started_at": "2026-04-22T10:00:00Z",
+  "ended_at": null,
+  "reviewed_word_count": 0,
+  "duration_seconds": null
+}
+```
+
+### 7.3 查询学习会话详情
+
+```http
+GET /api/study-sessions/{session_id}
+```
+
+成功响应：
+
+状态码：`200`
+
+```json
+{
+  "id": 1,
+  "started_at": "2026-04-22T10:00:00Z",
+  "ended_at": "2026-04-22T10:08:30Z",
+  "reviewed_word_count": 10,
+  "duration_seconds": 510
+}
+```
+
+失败响应：
+
+状态码：`404`
+
+```json
+{
+  "detail": "Study session not found."
+}
+```
+
+### 7.4 结束学习会话
+
+```http
+POST /api/study-sessions/{session_id}/finish
+```
+
+请求体：
+
+```json
+{
+  "reviewed_word_count": 10
+}
+```
+
+成功响应：
+
+状态码：`200`
+
+```json
+{
+  "id": 1,
+  "started_at": "2026-04-22T10:00:00Z",
+  "ended_at": "2026-04-22T10:08:30Z",
+  "reviewed_word_count": 10,
+  "duration_seconds": 510
+}
+```
+
+失败响应：
+
+状态码：`404`
+
+```json
+{
+  "detail": "Study session not found."
+}
+```
+
+---
+
+## 8. 背诵复习 API
+
+### 8.1 获取待复习单词
+
+```http
+GET /api/reviews/next?mode=zh_to_en&limit=10
+```
+
+查询参数：
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `mode` | string | 否 | `zh_to_en` | 背诵模式，可选 `zh_to_en`、`en_to_zh` |
+| `limit` | integer | 否 | `10` | 返回数量，范围 `1` 到 `100` |
+
+获取队列前，系统会先自动应用未复习熟练度衰减。V1 规则为每满 `1` 天未复习降低 `1` 级，最低为 `0`，并通过 `last_decay_applied_at` 避免重复扣减。
+
+成功响应：
+
+状态码：`200`
+
+```json
+{
+  "mode": "zh_to_en",
+  "items": [
+    {
+      "word_id": 1,
+      "spelling": "record",
+      "meanings": [
+        {
+          "id": 1,
+          "part_of_speech": "n",
+          "definition": "记录"
+        }
+      ],
+      "proficiency": 0,
+      "last_reviewed_at": "2026-04-22T10:00:00Z"
+    }
+  ]
+}
+```
+
+### 8.2 提交答案
+
+```http
+POST /api/reviews/answer
+```
+
+请求体：
+
+```json
+{
+  "word_id": 1,
+  "mode": "zh_to_en",
+  "answer": "record"
+}
+```
+
+判断规则：
+
+- `zh_to_en`：答案去除首尾空格后，与 `word.spelling` 比较，忽略大小写。
+- `en_to_zh`：答案去除首尾空格后，按空格拆分为词性和释义 token。
+- `en_to_zh` 输入只包含词性、释义和空格；每个释义归属于它之前最近一次出现的词性。
+- `en_to_zh` 必须匹配该单词所有 `(part_of_speech, meaning.definition)` 项，顺序不重要。
+- `en_to_zh` 不能少写释义、不能多写释义，也不能写错词性。
+
+英文到中文示例：
+
+```json
+{
+  "word_id": 1,
+  "mode": "en_to_zh",
+  "answer": "n 记录 v 记录 n 猫 狗"
+}
+```
+
+上例表示三个 `n` 释义：`记录`、`猫`、`狗`，以及一个 `v` 释义：`记录`。
+
+复习状态更新规则：
+
+- 答对：`proficiency = proficiency + 1`，并更新 `last_reviewed_at = now()`。
+- 答错：`proficiency = greatest(proficiency - 2, 0)`，并更新 `last_reviewed_at = now()`。
+- 每次答题后同步更新 `last_decay_applied_at = now()`。
+
+成功响应：
+
+状态码：`200`
+
+```json
+{
+  "word_id": 1,
+  "mode": "zh_to_en",
+  "is_correct": true,
+  "correct_answers": ["record"],
+  "proficiency": 1,
+  "last_reviewed_at": "2026-04-22T10:01:00Z"
+}
+```
 
 失败响应：
 

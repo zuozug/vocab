@@ -45,7 +45,8 @@ CREATE TABLE meaning (
 CREATE TABLE review_state (
     word_id BIGINT PRIMARY KEY,
     proficiency INTEGER NOT NULL DEFAULT 0,
-    last_reviewed_at TIMESTAMPTZ NULL,
+    last_reviewed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_decay_applied_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT fk_review_state_word

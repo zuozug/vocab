@@ -115,7 +115,13 @@ def create_word(conn: Connection, payload: WordCreate) -> dict[str, Any]:
 
         _insert_senses(cursor, word_id, payload.senses)
 
-        cursor.execute("insert into review_state(word_id) values (%s)", (word_id,))
+        cursor.execute(
+            """
+            insert into review_state(word_id, last_reviewed_at, last_decay_applied_at)
+            values (%s, now(), now())
+            """,
+            (word_id,),
+        )
 
     word = get_word(conn, word_id)
     if word is None:
@@ -140,7 +146,11 @@ def update_word(conn: Connection, word_id: int, payload: WordUpdate) -> dict[str
         cursor.execute("delete from word_sense where word_id = %s", (word_id,))
         _insert_senses(cursor, word_id, payload.senses)
         cursor.execute(
-            "insert into review_state(word_id) values (%s) on conflict (word_id) do nothing",
+            """
+            insert into review_state(word_id, last_reviewed_at, last_decay_applied_at)
+            values (%s, now(), now())
+            on conflict (word_id) do nothing
+            """,
             (word_id,),
         )
 
